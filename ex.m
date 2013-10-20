@@ -1,6 +1,6 @@
 clear all;
 load('digits-labels.mat');
-[pix, ex] = size(d); % 784x10000
+[pix, ex] = size(d);
 
 tr = zeros(pix, 1000); 
 trl = zeros(1, 1000); 
@@ -24,43 +24,57 @@ for i = 1:ex
     end
 end
 
-x = bsxfun(@minus, tr, mean(tr, 2));
-C = x * x' / size(x, 2);
-[U, v] = eigs(C, 15);
-U = sqrtm(v)\U';
+bdim = 0;
+bacc = 0;
+for dim = 1:50
+    rtr = bsxfun(@minus, tr, mean(tr, 2));
+    rt = bsxfun(@minus, t, mean(tr, 2));
 
-ztr = U*bsxfun(@minus, tr, mean(tr, 2));
-zt = U*bsxfun(@minus, t, mean(tr, 2));
+    C = rtr * rtr' / size(rtr, 2);
+    [U, v] = eigs(C, dim);
+    U = sqrtm(v) \ U';
 
-%rtr = bsxfun(@minus, tr, mean(tr, 2));
-%rt = bsxfun(@minus, t, mean(tr, 2));
+    ztr = U*rtr;
+    zt = U*rt;
 
-%utr = pca(rtr.', 'NumComponents', 20);
-%ut = pca(rt.', 'NumComponents', 20);
+    G = {10, 3};
+    for i = 1:10
+        s = ztr(:, trl == (i-1));
+        G{i, 1} = mean(s, 2);
+        G{i, 2} = cov(s.');
+        G{i, 3} = inv(G{i, 2});
+    end
 
-%ztr = utr.' * rtr;
-%zt = ut.' * rt;
+    [~, tex] = size(zt);
+    pl = zeros(1, tex);
+    for i = 1:tex
+        bg = -Inf;
+        bj = 0;
+        for j = 1:10
+            a = -zt(:, i).'*G{j, 3}*zt(:, i);
+            b = zt(:, i).'*G{j, 3}*G{j, 1};
+            c = G{j, 1}.'*G{j, 3}*G{j, 1};
+            d = G{j, 1}.'*G{j, 3}*zt(:, i);
+            g = 0.5*(a+b-c+d);
 
-G = {10, 3};
-for i = 1:10
-    s = ztr(:, trl == (i-1));
-    G{i, 1} = mean(s, 2);
-    G{i, 2} = cov(s.');
-    G{i, 3} = inv(G{i, 2});
-end
+            if g > bg
+                bg = g;
+                bj = j-1;
+            end
+        end
+        pl(1, i) = bj;
+    end
 
-for i = 1:10
-xm = bsxfun( @minus, zt, G{i, 1});
-d = sum(xm .* (G{i, 3} * xm), 1);
-ll(i,:) = -.5*d - size(zt,1)*pi*det( G{i,2});
-end
-% Pick the class that has the highest likelihood
-[~, j] = max( ll, [], 1); j = j - 1;
-
-c = 0;
-for i = 1:9000
-    if j(1, i) == tl(1, i)
-        c = c + 1;
+    cor = 0;
+    for i = 1:tex
+        if pl(1, i) == tl(1, i)
+            cor = cor + 1;
+        end
+    end
+    acc = cor/tex;
+    
+    if acc > bacc
+        bdim = dim;
+        bacc = acc;
     end
 end
-acc = c/9000;
